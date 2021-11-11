@@ -321,7 +321,6 @@ class ReceptionPointsCounter:
             self.matrix_unwinding = deepcopy(self.matrix_init)
             self.active_matrix = self._get_active_placement(
                 deepcopy(self.matrix))
-            winding_day = 0
             unwinding_day = 0
             max_common_area = 0
             summa_area = 0
@@ -329,28 +328,24 @@ class ReceptionPointsCounter:
             min_common_area = float('inf')
             next_area = self._get_next_unwinding_area(0, day, day)
             area += next_area
-            no_winding_area = False
             for i in range(self.size - 1):
                 winding_area = 0
                 unwinding_day += 1
                 self._blow_up(i)
                 need_area = self._get_next_unwinding_area(
                     i + 1, unwinding_day, unwinding_day, dry=True)
-                while area + need_area > self.max_area:
-                    if not (winding_area_one := self._winding_rp(i)):
-                        no_winding_area = True
+                if area + need_area > self.max_area:
+                    winding_area = self._winding_pp(i, need_area)
+                    if winding_area < need_area:
+                        stop_i = i
+                        stop_key = result.path[i]
                         break
-                    winding_area += winding_area_one
-                    area -= winding_area_one
-                else:
-                    next_area = self._get_next_unwinding_area(
-                        i + 1, unwinding_day, unwinding_day)
-                    area += next_area
+                    area -= winding_area
 
-                if no_winding_area:
-                    stop_i = i
-                    stop_key = result.path[i]
-                    break
+                next_area = self._get_next_unwinding_area(
+                    i + 1, unwinding_day, unwinding_day)
+                area += next_area
+
                 c += 1
                 common_area = next_area + winding_area
                 summa_area += common_area
@@ -365,7 +360,7 @@ class ReceptionPointsCounter:
                     break
             else:
                 self._blow_up(c)
-                winding_area = self._winding_rp(c)
+                winding_area = self._winding_pp(c)
                 if self.dic.get('dispersion', self.dispersion) > dispersion:
                     self.dic['dispersion'] = dispersion
                     answer = Answer(self.min_x, self.min_y,
@@ -424,7 +419,7 @@ class ReceptionPointsCounter:
             for y in range(self.min_y[i], self.max_y[i] + 2 * self.M):
                 self.active_matrix[y][x] -= 1
 
-    def _winding_rp(self, day: int):
+    def _winding_pp(self, day: int, need_area: int = None):
         winding_area = 0
         for y in range(len(self.matrix)):
             for x in range(len(self.matrix[0])):
@@ -432,6 +427,8 @@ class ReceptionPointsCounter:
                     self.matrix[y][x] = [0, day]
                     self.active_matrix[y][x] -= 1
                     winding_area += 1
+                    if need_area and need_area == winding_area:
+                        return need_area
         return winding_area
 
 
@@ -443,17 +440,21 @@ class Razmotka:
                  top=5,
                  daily_explode_area=130,
                  solutions_for_box=10,
-                 wait_time=10):
+                 wait_time=10,
+                 matrix=None):
 
         self.N = n
         self.M = m
-
-        self.matrix = [[
-            0 if ((x > 39 and 18 < y < 49)
-                  or (x > 26 and 49 <= y < 61)) else 1
-            for x in range(42)
-        ] for y in range(61)]
-        self.matrix_pp = [[0 for _ in range(42 + 2 * self.N)] for _ in range(61 + 2 * self.M)]
+        if matrix is None:
+            self.matrix = [[
+                0 if ((x > 39 and 18 < y < 49)
+                      or (x > 24 and 49 <= y < 61)) else 1
+                for x in range(42)
+            ] for y in range(61)]
+        self.matrix_pp = [
+            [0 for _ in range(len(self.matrix[0]) + 2 * self.N)]
+            for _ in range(len(self.matrix) + 2 * self.M)
+        ]
         self.rect_area = 2000
         self.area_max = area_max
         self.start_point = start_point
@@ -570,7 +571,7 @@ class Razmotka:
             solution_count = fill_small_box.find_rectangles()
             if not solution_count:
                 return None
-            # solution_for_box = [sol.__dict__ for sol in fill_small_box.solution]
+            random.shuffle(fill_small_box.solution)
             # print(solution_for_box)
             print(solution_count)
             print(len(fill_small_box.solution))

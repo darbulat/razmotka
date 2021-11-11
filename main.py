@@ -10,20 +10,29 @@ app = Flask(__name__)
 
 @app.route("/start")
 def update_item():
-    razmotka = Razmotka(n=10, m=10, area_max=2200,
-                        daily_explode_area=130, top=2,
+    all_points = 13785
+    days = 30
+    points_per_section = 6
+    channels = 13200
+    N = 12
+    M = 11
+    daily_explode_area = int(all_points / points_per_section / days / 0.8)
+    area_max = channels / points_per_section
+    razmotka = Razmotka(n=N, m=M, area_max=area_max,
+                        daily_explode_area=daily_explode_area, top=2,
                         start_point='up-right')
-    answers_list = razmotka.start_algorithm(timeout=7)
+    answers_list = razmotka.start_algorithm(timeout=1)
     if answers_list is None:
         return "No answer"
     print(len(answers_list))
-    save_result = SaveResults(n=10, m=10)
+    save_result = SaveResults(mesa_folder='algorithm/mesa/',
+                              points_per_section=points_per_section)
     i = 0
-    for answer_ in answers_list:
-        answer_ = answer_[1]
+    for answer in answers_list:
+        answer = answer[1]
         folder_name = 'razmotka/' + datetime.datetime.now().strftime(
-            '%Y%m%d_%H%M%S') + f'_{answer_.dispersion}_{i}'
-        save_result.save_answer(answer_, folder=folder_name)
+            '%Y%m%d_%H%M%S') + f'_{answer.dispersion}_{i}'
+        save_result.save_answer(answer, folder=folder_name)
         i += 1
 
     return {"answers_list": answers_list}
