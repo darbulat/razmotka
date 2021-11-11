@@ -14,8 +14,6 @@ import minizinc
 import zython as zn
 from zython.result import Result
 
-from algorithm.save_results import SaveResults
-
 
 @dataclass
 class Answer:
@@ -168,28 +166,6 @@ class FillSmallBox(MinizincModel):
         return max_delta_max <= delta
 
 
-def find_rectangles_for_solution(solution, rect_area: int):
-    boxes = [BBox(
-        solution.min_x[i],
-        solution.min_y[i],
-        solution.max_x[i],
-        solution.max_y[i]
-    ) for i in range(solution.count_)]
-    answers_for_box = []
-    for bbox in boxes:
-        fill_small_box = FillSmallBox(
-            bbox, rect_area, nr_solutions=10, timeout=timedelta(seconds=10))
-        solution_count = fill_small_box.find_rectangles()
-        if not solution_count:
-            return None
-        # solution_for_box = [sol.__dict__ for sol in fill_small_box.solution]
-        # print(solution_for_box)
-        print(solution_count)
-        print(len(fill_small_box.solution))
-        answers_for_box.append(fill_small_box.solution)
-    return answers_for_box
-
-
 class TSP(MinizincModel):
     def __init__(self, distances, start_position: int = 0):
         self.distances = zn.Array(distances)
@@ -284,7 +260,8 @@ class ReceptionPointsCounter:
                  min_x: list, min_y: list,
                  max_x: list, max_y: list,
                  max_area: int, dic,
-                 n, m):
+                 n, m,
+                 start_point):
         self.N = n
         self.M = m
         self.matrix_init = matrix
@@ -295,6 +272,7 @@ class ReceptionPointsCounter:
         self.max_area = max_area
         self.size = len(min_x)
         self.dic = dic
+        self.start_point = start_point
 
     def create_graph_from_boxes(self):
         graph = [
@@ -319,7 +297,7 @@ class ReceptionPointsCounter:
 
     def fill_matrix_rp(self):
         graph = self.create_graph_from_boxes()
-        start_position = self._get_start_position(code='up-right')
+        start_position = self._get_start_position()
         model = TSP(graph, start_position=start_position)
         results = model.solve_satisfy(all_solutions=True, solver='chuffed')
         results = results.original.solution
@@ -399,25 +377,25 @@ class ReceptionPointsCounter:
                     self.dispersion = dispersion
         return answer
 
-    def _get_start_position(self, code='up-right'):
+    def _get_start_position(self):
         start_x = 0
         start_i = 0
-        if code == 'up-right':
+        if self.start_point == 'up-right':
             for i in range(self.size):
                 if self.min_y_init[i] == 0 and self.min_x_init[i] >= start_x:
                     start_x = self.min_x_init[i]
                     start_i = i
             return start_i
-        if code == 'up-left':
+        if self.start_point == 'up-left':
             return 0
         start_y = 0
-        if code == 'down-left':
+        if self.start_point == 'down-left':
             for i in range(self.size):
                 if self.min_x_init[i] == 0 and self.min_y_init[i] >= start_y:
                     start_y = self.min_y_init[i]
                     start_i = i
             return start_i
-        raise KeyError(f'Wrong code {code}')
+        raise KeyError(f'Wrong start position {self.start_point}')
 
     def _get_active_placement(self, active_matrix):
         for i in range(self.size):
@@ -459,7 +437,13 @@ class ReceptionPointsCounter:
 
 class Razmotka:
 
-    def __init__(self, n, m):
+    def __init__(self, n, m,
+                 area_max=2200,
+                 start_point='up-left',
+                 top=5,
+                 daily_explode_area=130,
+                 solutions_for_box=10,
+                 wait_time=10):
 
         self.N = n
         self.M = m
@@ -471,7 +455,12 @@ class Razmotka:
         ] for y in range(61)]
         self.matrix_pp = [[0 for _ in range(42 + 2 * self.N)] for _ in range(61 + 2 * self.M)]
         self.rect_area = 2000
-        self.area_max = 2200
+        self.area_max = area_max
+        self.start_point = start_point
+        self.top = top
+        self.daily_explode_area = daily_explode_area
+        self.solutions_for_box = solutions_for_box
+        self.wait_time = wait_time
 
     def find_unwinding_scheme(self, sol1, sol2, sol3, dic):
         x_min = sol1['min_x'] + sol2['min_x'] + sol3['min_x']
@@ -486,7 +475,8 @@ class Razmotka:
             max_area=self.area_max,
             dic=dic,
             n=self.N,
-            m=self.M
+            m=self.M,
+            start_point=self.start_point
         )
         answer = reception_points.fill_matrix_rp()
         if answer:
@@ -530,7 +520,7 @@ class Razmotka:
                                          count=3,
                                          accuracy=1)
         answers = [((-float('inf'), i), Answer([], [], [], [], [], [], 0, 0))
-                   for i in range(-5, 0)]
+                   for i in range(self.top)]
         heapq.heapify(answers)
         dic = dict()
         start_time = datetime.datetime.now()
@@ -538,7 +528,7 @@ class Razmotka:
         for ans in fill_rectangles.generate_scheme():
             if ans is None:
                 continue
-            coords = find_rectangles_for_solution(solution=ans, rect_area=130)
+            coords = self.find_rectangles_for_solution(solution=ans)
             if not coords:
                 continue
             i = 0
@@ -563,17 +553,26 @@ class Razmotka:
 
             return answers
 
-
-if __name__ == '__main__':
-
-    razmotka = Razmotka(5, 5)
-
-    answers_list = razmotka.start_algorithm()
-
-    print(len(answers_list))
-    for answer_ in answers_list:
-        answer_ = answer_[1]
-        folder_name = 'razmotka/' + datetime.datetime.now().strftime(
-            '%Y%m%d_%H%M%S') + f'{answer_.dispersion}'
-        save_result = SaveResults()
-        save_result.save_answer(answer_, folder=folder_name)
+    def find_rectangles_for_solution(self, solution):
+        boxes = [BBox(
+            solution.min_x[i],
+            solution.min_y[i],
+            solution.max_x[i],
+            solution.max_y[i]
+        ) for i in range(solution.count_)]
+        answers_for_box = []
+        for bbox in boxes:
+            fill_small_box = FillSmallBox(
+                bbox, self.daily_explode_area,
+                nr_solutions=self.solutions_for_box,
+                timeout=timedelta(seconds=self.wait_time)
+            )
+            solution_count = fill_small_box.find_rectangles()
+            if not solution_count:
+                return None
+            # solution_for_box = [sol.__dict__ for sol in fill_small_box.solution]
+            # print(solution_for_box)
+            print(solution_count)
+            print(len(fill_small_box.solution))
+            answers_for_box.append(fill_small_box.solution)
+        return answers_for_box

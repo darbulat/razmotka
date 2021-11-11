@@ -6,9 +6,9 @@ from shapely.geometry import MultiPoint, Polygon, Point, shape
 
 
 class SaveResults:
-    def __init__(self):
-        self.N = 12
-        self.M = 11
+    def __init__(self, n, m):
+        self.N = n
+        self.M = m
 
         self.matrix = [[
             0 if ((x > 39 and 18 < y < 49)
@@ -23,6 +23,11 @@ class SaveResults:
             len(self.matrix[0]) + 1,
             len(self.matrix) + 1,
         )
+        self.r_points, self.matched_matrix = self.parse_mesa(
+            'algorithm/mesa/r',
+            len(self.matrix_pp[0]) + 1,
+            len(self.matrix_pp) + 1,
+        )
 
     def match_coords(self, width, height, min_x, min_y, max_x, max_y):
         ans = [[0 for _ in range(width)] for _ in range(height)]
@@ -34,11 +39,11 @@ class SaveResults:
                 ]
         return ans
 
-    def get_winding_from_polygons(self, matrix_point: list, polygons: list,
+    def get_winding_from_polygons(self, polygons: list,
                                   folder: str,
                                   postfix: str):
         for i in range(len(polygons)):
-            points = [Point(matrix_point[xy[1]][xy[0]]) for xy in polygons[i]]
+            points = [Point(self.matched_matrix[xy[1]][xy[0]]) for xy in polygons[i]]
             if not points:
                 continue
             m_point = MultiPoint(points)
@@ -68,23 +73,21 @@ class SaveResults:
                     polygons[matrix_reception[y][x][1]].append((x, y))
         return polygons
 
-    def get_winding_reception_points(self, matrix_points: list,
+    def get_winding_reception_points(self,
                                      matrix_reception: list,
                                      size: int, folder: str):
         polygons = self.get_polygons_for_winding(matrix_reception, size)
         self.get_winding_from_polygons(
-            matrix_points,
             polygons,
             folder,
             'reception_winding',
         )
 
-    def get_unwinding_reception_points(self, matrix_points: list,
+    def get_unwinding_reception_points(self,
                                        matrix_reception: list,
                                        size: int, folder: str):
         polygons = self.get_polygons_for_winding(matrix_reception, size)
         self.get_winding_from_polygons(
-            matrix_points,
             polygons,
             folder,
             'reception_unwinding',
@@ -131,15 +134,11 @@ class SaveResults:
             folder,
             'excitation',
         )
-        r_points, matched_matrix = self.parse_mesa(
-            'algorithm/mesa/r',
-            len(self.matrix_pp[0]) + 1,
-            len(self.matrix_pp) + 1,
-        )
         self.get_winding_reception_points(
-            matched_matrix, answer.matrix, len(answer.min_x), folder)
+            answer.matrix,
+            len(answer.min_x), folder
+        )
         self.get_unwinding_reception_points(
-            matched_matrix,
             answer.matrix_unwinding,
             len(answer.min_x), folder,
         )
