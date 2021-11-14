@@ -493,13 +493,6 @@ class Razmotka:
 
     def find_unwinding_scheme_parallel(self, coords_0: list, coords_1: list,
                                        coords_2: list, answers: list, dic):
-        # for solution1, solution2, solution3 in zip(
-        #         coords_0, coords_1, coords_2
-        # ):
-        #     answer = find_unwinding_scheme(solution1.__dict__, solution2.__dict__,
-        #                                    solution3.__dict__, dic)
-        #     if answer:
-        #         heapq.heappushpop(answers, ((-answer.dispersion, 100), answer))
         with ProcessPoolExecutor(max_workers=mp.cpu_count()) as executor:
             futures = [
                 executor.submit(self.find_unwinding_scheme,
