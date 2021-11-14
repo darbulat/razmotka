@@ -32,3 +32,4 @@ watchgod==0.7
 websockets==10.0
 Werkzeug==2.0.2
 zython==0.1.5
+requests==2.26.0

@@ -65,6 +65,9 @@ class SaveResults:
                 schema=reception_schema,
         ) as fi:
             for i in range(len(polygons)):
+                day = i
+                if postfix == 'unwinding':
+                    day -= 1
                 polygon = polygons[i]
                 points = self.r_points.intersection(polygon)
                 if points.is_empty:
