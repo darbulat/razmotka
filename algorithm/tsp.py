@@ -260,10 +260,10 @@ class ReceptionPointsCounter:
                  min_x: list, min_y: list,
                  max_x: list, max_y: list,
                  max_area: int, dic,
-                 n, m,
+                 active_line_x, active_line_y,
                  start_point):
-        self.N = n
-        self.M = m
+        self.active_line_x = active_line_x
+        self.active_line_y = active_line_y
         self.matrix_init = matrix
         self.min_x_init = min_x
         self.min_y_init = min_y
@@ -394,8 +394,10 @@ class ReceptionPointsCounter:
 
     def _get_active_placement(self, active_matrix):
         for i in range(self.size):
-            for y in range(self.min_y[i], self.max_y[i] + 2 * self.M):
-                for x in range(self.min_x[i], self.max_x[i] + 2 * self.N):
+            for y in range(self.min_y[i],
+                           self.max_y[i] + 2 * self.active_line_y):
+                for x in range(self.min_x[i],
+                               self.max_x[i] + 2 * self.active_line_x):
                     active_matrix[y][x] += 1
         for y in range(len(active_matrix)):
             for x in range(len(active_matrix[0])):
@@ -405,8 +407,10 @@ class ReceptionPointsCounter:
 
     def _get_next_unwinding_area(self, i, c, day, dry=False):
         next_area = 0
-        for x in range(self.min_x[i], self.max_x[i] + 2 * self.N):
-            for y in range(self.min_y[i], self.max_y[i] + 2 * self.M):
+        for x in range(self.min_x[i],
+                       self.max_x[i] + 2 * self.active_line_x):
+            for y in range(self.min_y[i],
+                           self.max_y[i] + 2 * self.active_line_y):
                 if self.matrix[y][x] == 0:
                     if not dry:
                         self.matrix[y][x] = [c, day]
@@ -415,8 +419,10 @@ class ReceptionPointsCounter:
         return next_area
 
     def _blow_up(self, i):
-        for x in range(self.min_x[i], self.max_x[i] + 2 * self.N):
-            for y in range(self.min_y[i], self.max_y[i] + 2 * self.M):
+        for x in range(self.min_x[i],
+                       self.max_x[i] + 2 * self.active_line_x):
+            for y in range(self.min_y[i],
+                           self.max_y[i] + 2 * self.active_line_y):
                 self.active_matrix[y][x] -= 1
 
     def _winding_pp(self, day: int, need_area: int = None):
@@ -434,7 +440,7 @@ class ReceptionPointsCounter:
 
 class Razmotka:
 
-    def __init__(self, n, m,
+    def __init__(self, active_line_x, active_line_y,
                  area_max=2200,
                  start_point='up-left',
                  top=5,
@@ -443,8 +449,8 @@ class Razmotka:
                  wait_time=10,
                  matrix=None):
 
-        self.N = n
-        self.M = m
+        self.active_line_x = active_line_x
+        self.active_line_y = active_line_y
         if matrix is None:
             self.matrix = [[
                 0 if ((x > 39 and 18 < y < 49)
@@ -452,8 +458,8 @@ class Razmotka:
                 for x in range(42)
             ] for y in range(61)]
         self.matrix_pp = [
-            [0 for _ in range(len(self.matrix[0]) + 2 * self.N)]
-            for _ in range(len(self.matrix) + 2 * self.M)
+            [0 for _ in range(len(self.matrix[0]) + 2 * self.active_line_x)]
+            for _ in range(len(self.matrix) + 2 * self.active_line_y)
         ]
         self.rect_area = 2000
         self.area_max = area_max
@@ -471,12 +477,11 @@ class Razmotka:
 
         reception_points = ReceptionPointsCounter(
             deepcopy(self.matrix_pp),
-            x_min, y_min,
-            x_max, y_max,
+            x_min, y_min, x_max, y_max,
             max_area=self.area_max,
             dic=dic,
-            n=self.N,
-            m=self.M,
+            active_line_x=self.active_line_x,
+            active_line_y=self.active_line_y,
             start_point=self.start_point
         )
         answer = reception_points.fill_matrix_rp()
@@ -513,7 +518,8 @@ class Razmotka:
                 if answer:
                     i = random.randint(-10000, 10000)
                     print(i)
-                    heapq.heappushpop(answers, ((-answer.dispersion, i), answer))
+                    heapq.heappushpop(answers,
+                                      ((-answer.dispersion, i), answer))
 
     def start_algorithm(self, timeout=1):
         fill_rectangles = FillRectangles(matrix=self.matrix,
@@ -545,10 +551,11 @@ class Razmotka:
                     coords_2.append(solution2)
                     i += 1
                 else:
-                    self.find_unwinding_scheme_parallel(coords_0, coords_1, coords_2,
-                                                        answers, dic)
+                    self.find_unwinding_scheme_parallel(
+                        coords_0, coords_1, coords_2, answers, dic)
                     i = 0
-                if (datetime.datetime.now() - start_time).seconds / 60 > timeout:
+                if (datetime.datetime.now() - start_time
+                ).seconds / 60 > timeout:
                     print((datetime.datetime.now() - start_time).seconds / 60)
                     return answers
 

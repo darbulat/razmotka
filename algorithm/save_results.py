@@ -19,21 +19,23 @@ def transform_geometry(g1, proj_from, proj_to):
 
 
 class SaveResults:
-    def __init__(self, mesa_folder, points_per_section=6, crs=4326):
+    def __init__(self, mesa_folder, points_per_section=6, crs=4326,
+                 active_line_x=11, active_line_y=11):
+        self.active_line_y = active_line_y
+        self.active_line_x = active_line_x
         self.crs = crs
         self.points_per_section = points_per_section
-
+        excitation_points_path = os.path.join(mesa_folder, 's')
+        reception_points_path = os.path.join(mesa_folder, 'r')
         (self.s_points,
          self.matrix_excitation_points) = self._get_strict_multipoints(
-            os.path.join(mesa_folder, 's'),
-        )
-        (_,
-         self.matrix_reception_points) = self._get_strict_multipoints(
-            os.path.join(mesa_folder, 'r'),
-            y_name='Point numb',
-            x_name='Line name',
-        )
-        self.r_points = self.parse_mesa(os.path.join(mesa_folder, 'r'))
+            excitation_points_path)
+
+        self.r_points, _, self.reception_line_distance = self.parse_mesa(
+            reception_points_path, y_name='Point numb', x_name='Line name')
+        _, self.excitation_line_distance, _ = self.parse_mesa(
+            excitation_points_path, y_name='Line name', x_name='Point numb')
+        self.matrix_reception_points = self._get_matrix_reception_points()
 
     def match_coords(self, width, height, min_x, min_y, max_x, max_y):
         ans = [[0 for _ in range(width)] for _ in range(height)]
@@ -77,21 +79,6 @@ class SaveResults:
                 }
                 fi.write(reception_points)
         return file
-
-    def is_bound(self, matr: list, x: int, y: int) -> bool:
-        if not isinstance(matr[y][x], list):
-            return False
-        try:
-            return (matr[y][x][1] != matr[y][x + 1][1]
-                    or matr[y][x][1] != matr[y][x - 1][1]
-                    or matr[y][x][1] != matr[y + 1][x][1]
-                    or matr[y][x][1] != matr[y - 1][x][1]
-                    or matr[y][x][1] != matr[y - 1][x - 1][1]
-                    or matr[y][x][1] != matr[y + 1][x + 1][1]
-                    or matr[y][x][1] != matr[y - 1][x + 1][1]
-                    or matr[y][x][1] != matr[y + 1][x - 1][1])
-        except (IndexError, TypeError):
-            return True
 
     def get_polygons_for_winding(self, matrix_reception: list, size: int):
         polygons = [Polygon() for _ in range(size)]
@@ -169,11 +156,49 @@ class SaveResults:
                 fi.write(excitation_points)
         return file
 
-    def parse_mesa(self, geom_file):
+    def parse_mesa(self, geom_file, y_name='Line name', x_name='Point numb'):
+        max_point_numb = 0
+        min_point_numb = float('inf')
+        max_line_name = 0
+        min_line_name = float('inf')
         with fiona.open(geom_file) as fiona_rp:
             points = MultiPoint(
                 [Point(shape(rp['geometry'])) for rp in fiona_rp])
-        return points
+            for rp in fiona_rp:
+                line_name = rp['properties'][y_name]
+                point_numb = rp['properties'][x_name]
+                if line_name > max_line_name:
+                    max_line_name = line_name
+                if line_name < min_line_name:
+                    min_line_name = line_name
+                if point_numb > max_point_numb:
+                    max_point_numb = point_numb
+                if point_numb < min_point_numb:
+                    min_point_numb = point_numb
+
+        line_count = int(max_line_name - min_line_name)
+        point_numb_count = int(max_point_numb - min_point_numb)
+        if x_name == 'Point numb':
+            point_numb_count += 1
+        else:
+            line_count += 1
+        width = (line_count / self.points_per_section)
+        height = (point_numb_count / self.points_per_section)
+        if x_name == 'Point numb':
+            width += 1
+        else:
+            height += 1
+        width = int(width)
+        height = int(height)
+
+        min_x_coord = points.bounds[0]
+        min_y_coord = points.bounds[3]
+        max_x_coord = points.bounds[2]
+        max_y_coord = points.bounds[1]
+        x_line_distance = (max_x_coord - min_x_coord) / (width - 1)
+        y_line_distance = (max_y_coord - min_y_coord) / (height - 1)
+
+        return points, x_line_distance, y_line_distance
 
     def save_answer(self, answer, folder: str) -> Tuple:
         os.makedirs(folder, exist_ok=True)
@@ -217,41 +242,67 @@ class SaveResults:
 
         line_count = int(max_line_name - min_line_name)
         point_numb_count = int(max_point_numb - min_point_numb)
-        if x_name == 'Point numb':
-            point_numb_count += 1
-        else:
-            line_count += 1
+        point_numb_count += 1
         width = (line_count / self.points_per_section)
         height = (point_numb_count / self.points_per_section)
-        if x_name == 'Point numb':
-            width += 1
-        else:
-            height += 1
+        width += 1
         width = int(width)
         height = int(height)
-        print(f'{line_count=}')
-        print(f'{point_numb_count=}')
 
         min_x_coord = points.bounds[0]
         min_y_coord = points.bounds[3]
         max_x_coord = points.bounds[2]
         max_y_coord = points.bounds[1]
-        delta_x = (max_x_coord - min_x_coord) / line_count / 2
-        delta_y = (max_y_coord - min_y_coord) / point_numb_count / 2
+        self.delta_x = (max_x_coord - min_x_coord) / line_count / 2
+        self.delta_y = (max_y_coord - min_y_coord) / point_numb_count / 2
         points = self.match_coords(width, point_numb_count, min_x_coord,
                                    min_y_coord, max_x_coord, max_y_coord)
         matched_matrix = self.match_coords(
             width + 2, height + 2,
-            min_x_coord - delta_x,
-            min_y_coord - delta_y,
-            max_x_coord + delta_x * 2,
-            max_y_coord + delta_y * 2
+            min_x_coord - self.delta_x,
+            min_y_coord - self.delta_y,
+            max_x_coord + self.delta_x * 2,
+            max_y_coord + self.delta_y * 2
         )
         multi_points = MultiPoint(
             [points[y][x] for y, x
              in product(range(point_numb_count), range(width))]
         )
+        self.min_x_coord = min_x_coord
+        self.min_y_coord = min_y_coord
+        self.max_x_coord = max_x_coord
+        self.max_y_coord = max_y_coord
         return multi_points, matched_matrix
+
+    def _get_matrix_reception_points(self):
+        min_x_coord = (
+                self.min_x_coord -
+                self.excitation_line_distance * self.active_line_x
+        )
+        min_y_coord = (
+                self.min_y_coord - self.delta_y * 2 -
+                self.reception_line_distance * self.active_line_y
+        )
+        max_x_coord = (
+                self.max_x_coord +
+                self.excitation_line_distance * self.active_line_x
+        )
+        max_y_coord = (
+                self.max_y_coord - self.delta_y * 2 +
+                self.reception_line_distance * self.active_line_y
+        )
+        width = (max_x_coord - min_x_coord) / self.excitation_line_distance
+        height = (max_y_coord - min_y_coord) / self.reception_line_distance
+        width = int(width)
+        height = int(height)
+        matched_matrix = self.match_coords(
+            width + 2, height + 2,
+            min_x_coord,
+            min_y_coord,
+            max_x_coord,
+            max_y_coord,
+        )
+        return matched_matrix
 
 
 if __name__ == '__main__':
@@ -269,8 +320,8 @@ if __name__ == '__main__':
         max_area: int
         dispersion: int
 
-    N = 5
-    M = 7
+    active_line_x = 5
+    active_line_y = 7
     ans = {
         "max_x": [42, 20, 20, 31, 42, 42, 31, 20, 10, 14, 14, 25, 40, 40, 25,
                   14, 14, 25, 40, 40, 40, 25, 11, 25, 11, 25],
@@ -291,5 +342,7 @@ if __name__ == '__main__':
                     matrix=wind_matrix, matrix_unwinding=unwind_matrix,
                     max_area=0, dispersion=0)
 
-    save_results = SaveResults(mesa_folder='mesa/', crs=28412)
+    save_results = SaveResults(mesa_folder='mesa/', crs=28412,
+                               active_line_x=active_line_x,
+                               active_line_y=active_line_y)
     save_results.save_answer(answer, folder='1')

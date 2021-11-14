@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: algorithm
+  namespace: gpn
+  labels:
+    app: algorithm
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: algorithm
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: algorithm
+    spec:
+      containers:
+      - name: algorithm-container
+        image: harbor.stageogip.ru/gpn/algorithm:$BUILD_BUILDID
+        envFrom:
+        - secretRef:
+            name: algorithm-secret
+        resources:
+          limits:
+            cpu: '8'
+            memory: 16Gi
+          requests:
+            cpu: '4'
+            memory: 8Gi
+        ports:
+        - containerPort: 5000
