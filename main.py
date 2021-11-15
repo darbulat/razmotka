@@ -11,6 +11,11 @@ from flask import Flask, request, send_file
 app = Flask(__name__)
 
 backend_url = os.environ.get('BACKEND_URL')
+top_results = int(os.environ.get('TOP_RESULTS', 5))
+day_coefficient = float(os.environ.get('DAY_COEFFICIENT', 0.8))
+common_timeout = int(os.environ.get('TIMEOUT_COMMON', 1))
+small_timeout = int(os.environ.get('TIMEOUT_SMALL', 10))
+solutions_for_box = int(os.environ.get('SOLUTIONS_FOR_BOX', 10))
 
 
 @app.post("/calculate")
@@ -46,13 +51,11 @@ def update_item():
         if mesa_xps_file.status_code == 200:
             mesa_xps_file = mesa_xps_file.text
 
-    top_answers = 5
-    timeout = 1  # TODO timeout = 7
+    timeout = common_timeout
     all_excitation_points = 13785  # все точки взрыва на всей территории
     crs = 28412
     points_per_section = 6  # количество точек в одном отрезке взрыва
     mask_excitation = None
-
     if mesa_sps_file is not None and mesa_rps_file is not None:
         mesa_exporter = MesaExporter(mesa_folder)
         mesa_excitation_path = mesa_exporter.get_shapefile_from_mesa(
@@ -62,16 +65,26 @@ def update_item():
         all_excitation_points = MesaExporter.count_all_points(
             mesa_excitation_path)
         crs = mesa_exporter.crs
-        mask_excitation = mesa_exporter.get_mask_from_shp(mesa_excitation_path)
-    active_line_x = channels_in_active_spread / points_per_section / 2
+        mask_excitation = mesa_exporter.get_mask_from_shp(
+            mesa_excitation_path,
+            mesa_reception_path,
+        )
+        points_per_section = MesaExporter.count_points_per_section(
+            s_filepath=mesa_excitation_path,
+            r_filepath=mesa_reception_path,
+        )
+
+    active_line_x = int(channels_in_active_spread / points_per_section / 2)
     daily_explode_area = int(
-        all_excitation_points / points_per_section / days / 0.8)
+        all_excitation_points / points_per_section / days / day_coefficient)
     area_max = int(channels / points_per_section)
     razmotka = Razmotka(active_line_x=active_line_x,
                         active_line_y=active_line_y, area_max=area_max,
-                        start_point='up-right', top=top_answers,
+                        start_point='up-right', top=top_results,
                         daily_explode_area=daily_explode_area,
-                        matrix=mask_excitation)
+                        matrix=mask_excitation,
+                        wait_time=small_timeout,
+                        solutions_for_box=solutions_for_box)
     answers_list = razmotka.start_algorithm(timeout=timeout)
     if answers_list is None:
         return "No answer"
