@@ -167,7 +167,6 @@ if __name__ == '__main__':
     diretory_path = './mesa/SPS_FINAL_raw/'
     r_filename = 'R.rps'
     s_filename = 'S.sps'
-    a = isinstance(range(4), range)
     with open(os.path.join(diretory_path, s_filename), 'r') as f:
         s_content = f.read().split('\n')
     with open(os.path.join(diretory_path, r_filename), 'r') as f:
@@ -177,4 +176,5 @@ if __name__ == '__main__':
     reception_shp = mesa_exporter.get_shapefile_from_mesa(r_content, 'R')
     reception_count = MesaExporter.count_all_points(excitation_shp)
     excitation_count = MesaExporter.count_all_points(reception_shp)
-    mask = mesa_exporter.get_mask_from_shp(excitation_shp)
+    mask = mesa_exporter.get_mask_from_shp(excitation_shp, reception_shp)
+    print(mask)

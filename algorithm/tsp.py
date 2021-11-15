@@ -9,6 +9,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import timedelta
 from itertools import product
+from typing import Tuple
 
 import minizinc
 import zython as zn
@@ -69,14 +70,18 @@ class FillSmallBox(MinizincModel):
         self.rect_area = rect_area
         self.area = (bbox.max_x - bbox.min_x) * (bbox.max_y - bbox.min_y)
         self.count = count if count else math.ceil(self.area / rect_area)
-        self.min_x = zn.Array(zn.var(zn.var_par.types._range(bbox.min_x, bbox.max_x)),
-                              shape=self.count)
-        self.min_y = zn.Array(zn.var(zn.var_par.types._range(bbox.min_y, bbox.max_y)),
-                              shape=self.count)
-        self.max_x = zn.Array(zn.var(zn.var_par.types._range(bbox.min_x + 1, bbox.max_x + 1)),
-                              shape=self.count)
-        self.max_y = zn.Array(zn.var(zn.var_par.types._range(bbox.min_y + 1, bbox.max_y + 1)),
-                              shape=self.count)
+        self.min_x = zn.Array(
+            zn.var(zn.var_par.types._range(bbox.min_x, bbox.max_x)),
+            shape=self.count)
+        self.min_y = zn.Array(
+            zn.var(zn.var_par.types._range(bbox.min_y, bbox.max_y)),
+            shape=self.count)
+        self.max_x = zn.Array(
+            zn.var(zn.var_par.types._range(bbox.min_x + 1, bbox.max_x + 1)),
+            shape=self.count)
+        self.max_y = zn.Array(
+            zn.var(zn.var_par.types._range(bbox.min_y + 1, bbox.max_y + 1)),
+            shape=self.count)
         self.area_ = (self._area())
         self.constraints = [
             (self.min_x[0] == bbox.min_x),
@@ -134,11 +139,11 @@ class FillSmallBox(MinizincModel):
         solutions = []
         if len(self.solution) == 1:
             return self.solution
-        for i in zn.var_par.types._range(0, len(self.solution) - 1):
+        for i in range(0, len(self.solution) - 1):
             if i >= len(self.solution):
                 return solutions
             solutions.append(self.solution[i])
-            for k in zn.var_par.types._range(i + 1, len(self.solution)):
+            for k in range(i + 1, len(self.solution)):
                 if k >= len(self.solution):
                     break
                 if self._is_near(self.solution[i], self.solution[k], 4):
@@ -155,7 +160,7 @@ class FillSmallBox(MinizincModel):
         max_x_2 = solution2.max_x
         max_y_2 = solution2.max_y
         max_delta_max = 0
-        for i in zn.var_par.types._range(len(min_x_1)):
+        for i in range(len(min_x_1)):
             delta_minx = abs(min_x_2[i] - min_x_1[i])
             delta_miny = abs(min_y_2[i] - min_y_1[i])
             delta_maxx = abs(max_x_2[i] - max_x_1[i])
@@ -200,10 +205,12 @@ class FillRectangles(MinizincModel):
                               shape=self.count)
         self.min_y = zn.Array(zn.var(zn.var_par.types._range(len(matrix))),
                               shape=self.count)
-        self.max_x = zn.Array(zn.var(zn.var_par.types._range(1, len(matrix[0]) + 1)),
-                              shape=self.count)
-        self.max_y = zn.Array(zn.var(zn.var_par.types._range(1, len(matrix) + 1)),
-                              shape=self.count)
+        self.max_x = zn.Array(
+            zn.var(zn.var_par.types._range(1, len(matrix[0]) + 1)),
+            shape=self.count)
+        self.max_y = zn.Array(
+            zn.var(zn.var_par.types._range(1, len(matrix) + 1)),
+            shape=self.count)
         self.count_ = (self._count())
         self.area_ = (self._area())
         self.constraints = [
@@ -261,7 +268,7 @@ class ReceptionPointsCounter:
                  max_x: list, max_y: list,
                  max_area: int, dic,
                  active_line_x, active_line_y,
-                 start_point):
+                 start_points: Tuple):
         self.active_line_x = active_line_x
         self.active_line_y = active_line_y
         self.matrix_init = matrix
@@ -272,32 +279,38 @@ class ReceptionPointsCounter:
         self.max_area = max_area
         self.size = len(min_x)
         self.dic = dic
-        self.start_point = start_point
+        self.start_points = start_points
 
     def create_graph_from_boxes(self):
         graph = [
-            [100 for _ in zn.var_par.types._range(self.size)]
-            for _ in zn.var_par.types._range(self.size)
+            [100 for _ in range(self.size)]
+            for _ in range(self.size)
         ]
         graph[self.size - 1][self.size - 1] = 0
-        for i in zn.var_par.types._range(self.size - 1):
+        start_x = self.start_points[0]
+        start_y = self.start_points[1]
+        start_position = float('inf')
+        for i in range(self.size - 1):
             graph[i][i] = 0
-            for j in zn.var_par.types._range(i + 1, self.size):
-                set_y_i = set(zn.var_par.types._range(self.min_y_init[i], self.max_y_init[i]))
-                set_y_j = set(zn.var_par.types._range(self.min_y_init[j], self.max_y_init[j]))
-                set_x_i = set(zn.var_par.types._range(self.min_x_init[i], self.max_x_init[i]))
-                set_x_j = set(zn.var_par.types._range(self.min_x_init[j], self.max_x_init[j]))
+            set_y_i = set(range(self.min_y_init[i], self.max_y_init[i]))
+            set_x_i = set(range(self.min_x_init[i], self.max_x_init[i]))
+            if start_x in set_x_i and start_y in set_y_i:
+                start_position = i
+            for j in range(i + 1, self.size):
+                set_y_j = set(range(self.min_y_init[j], self.max_y_init[j]))
+                set_x_j = set(range(self.min_x_init[j], self.max_x_init[j]))
                 if (self.max_x_init[i] == self.min_x_init[j]) and (
                         set_y_i.intersection(set_y_j)):
                     graph[i][j] = graph[j][i] = 1
                 if (self.max_y_init[i] == self.min_y_init[j]) and (
                         set_x_i.intersection(set_x_j)):
                     graph[i][j] = graph[j][i] = 1
-        return graph
+        return graph, start_position
 
     def fill_matrix_rp(self):
-        graph = self.create_graph_from_boxes()
-        start_position = self._get_start_position()
+        graph, start_position = self.create_graph_from_boxes()
+        if start_position == float('inf'):
+            raise KeyError(f'Wrong start position {self.start_points}')
         model = TSP(graph, start_position=start_position)
         results = model.solve_satisfy(all_solutions=True, solver='chuffed')
         results = results.original.solution
@@ -328,7 +341,7 @@ class ReceptionPointsCounter:
             min_common_area = float('inf')
             next_area = self._get_next_unwinding_area(0, day, day)
             area += next_area
-            for i in zn.var_par.types._range(self.size - 1):
+            for i in range(self.size - 1):
                 winding_area = 0
                 unwinding_day += 1
                 self._blow_up(i)
@@ -372,44 +385,24 @@ class ReceptionPointsCounter:
                     self.dispersion = dispersion
         return answer
 
-    def _get_start_position(self):
-        start_x = 0
-        start_i = 0
-        if self.start_point == 'up-right':
-            for i in zn.var_par.types._range(self.size):
-                if self.min_y_init[i] == 0 and self.min_x_init[i] >= start_x:
-                    start_x = self.min_x_init[i]
-                    start_i = i
-            return start_i
-        if self.start_point == 'up-left':
-            return 0
-        start_y = 0
-        if self.start_point == 'down-left':
-            for i in zn.var_par.types._range(self.size):
-                if self.min_x_init[i] == 0 and self.min_y_init[i] >= start_y:
-                    start_y = self.min_y_init[i]
-                    start_i = i
-            return start_i
-        raise KeyError(f'Wrong start position {self.start_point}')
-
     def _get_active_placement(self, active_matrix):
-        for i in zn.var_par.types._range(self.size):
-            for y in zn.var_par.types._range(self.min_y[i],
+        for i in range(self.size):
+            for y in range(self.min_y[i],
                            self.max_y[i] + 2 * self.active_line_y):
-                for x in zn.var_par.types._range(self.min_x[i],
+                for x in range(self.min_x[i],
                                self.max_x[i] + 2 * self.active_line_x):
                     active_matrix[y][x] += 1
-        for y in zn.var_par.types._range(len(active_matrix)):
-            for x in zn.var_par.types._range(len(active_matrix[0])):
+        for y in range(len(active_matrix)):
+            for x in range(len(active_matrix[0])):
                 if active_matrix[y][x] == 0:
                     active_matrix[y][x] = self.size
         return active_matrix
 
     def _get_next_unwinding_area(self, i, c, day, dry=False):
         next_area = 0
-        for x in zn.var_par.types._range(self.min_x[i],
+        for x in range(self.min_x[i],
                        self.max_x[i] + 2 * self.active_line_x):
-            for y in zn.var_par.types._range(self.min_y[i],
+            for y in range(self.min_y[i],
                            self.max_y[i] + 2 * self.active_line_y):
                 if self.matrix[y][x] == 0:
                     if not dry:
@@ -419,16 +412,16 @@ class ReceptionPointsCounter:
         return next_area
 
     def _blow_up(self, i):
-        for x in zn.var_par.types._range(self.min_x[i],
+        for x in range(self.min_x[i],
                        self.max_x[i] + 2 * self.active_line_x):
-            for y in zn.var_par.types._range(self.min_y[i],
+            for y in range(self.min_y[i],
                            self.max_y[i] + 2 * self.active_line_y):
                 self.active_matrix[y][x] -= 1
 
     def _winding_pp(self, day: int, need_area: int = None):
         winding_area = 0
-        for y in zn.var_par.types._range(len(self.matrix)):
-            for x in zn.var_par.types._range(len(self.matrix[0])):
+        for y in range(len(self.matrix)):
+            for x in range(len(self.matrix[0])):
                 if self.active_matrix[y][x] == 0:
                     self.matrix[y][x] = [0, day]
                     self.active_matrix[y][x] -= 1
@@ -442,30 +435,32 @@ class Razmotka:
 
     def __init__(self, active_line_x, active_line_y,
                  area_max=2200,
-                 start_point='up-left',
+                 start_point_coordinates=None,
                  top=5,
                  daily_explode_area=130,
                  solutions_for_box=10,
                  wait_time=10,
                  matrix=None):
 
+        if start_point_coordinates is None:
+            start_point_coordinates = (0, 0)
         self.active_line_x = active_line_x
         self.active_line_y = active_line_y
         if matrix is None:
             self.matrix = [[
                 0 if ((x > 39 and 18 < y < 49)
                       or (x > 24 and 49 <= y < 61)) else 1
-                for x in zn.var_par.types._range(42)
-            ] for y in zn.var_par.types._range(61)]
+                for x in range(42)
+            ] for y in range(61)]
         else:
             self.matrix = matrix
         self.matrix_pp = [
-            [0 for _ in zn.var_par.types._range(len(self.matrix[0]) + 2 * self.active_line_x)]
-            for _ in zn.var_par.types._range(len(self.matrix) + 2 * self.active_line_y)
+            [0 for _ in range(len(self.matrix[0]) + 2 * self.active_line_x)]
+            for _ in range(len(self.matrix) + 2 * self.active_line_y)
         ]
         self.rect_area = 2000
         self.area_max = area_max
-        self.start_point = start_point
+        self.start_point_coordinates = start_point_coordinates
         self.top = top
         self.daily_explode_area = daily_explode_area
         self.solutions_for_box = solutions_for_box
@@ -484,7 +479,7 @@ class Razmotka:
             dic=dic,
             active_line_x=self.active_line_x,
             active_line_y=self.active_line_y,
-            start_point=self.start_point
+            start_points=self.start_point_coordinates
         )
         answer = reception_points.fill_matrix_rp()
         if answer:
@@ -522,7 +517,7 @@ class Razmotka:
                                          count=3,
                                          accuracy=1)
         answers = [((-float('inf'), i), Answer([], [], [], [], [], [], 0, 0))
-                   for i in zn.var_par.types._range(self.top)]
+                   for i in range(self.top)]
         heapq.heapify(answers)
         dic = dict()
         start_time = datetime.datetime.now()
@@ -562,7 +557,7 @@ class Razmotka:
             solution.min_y[i],
             solution.max_x[i],
             solution.max_y[i]
-        ) for i in zn.var_par.types._range(solution.count_)]
+        ) for i in range(solution.count_)]
         answers_for_box = []
         for bbox in boxes:
             fill_small_box = FillSmallBox(
