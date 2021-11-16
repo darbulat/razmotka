@@ -36,7 +36,7 @@ def update_item():
     channels_in_active_spread = active_spread_params.get('num_channels', 144)
     start_point_coordinates = project.get('start_point_coordinates')
     start_point_coordinates = start_point_coordinates['geometry']
-    start_point_coordinates = Point(12447986.6, 6597120.1)
+    start_point_coordinates = Point(12447986.6, 6597120.1)  # TODO убарть
     mesa_folder = 'algorithm/mesa'
     mesa_sps = active_spread_params.get('mesa_sps', None)
     mesa_rps = active_spread_params.get('mesa_rps', None)

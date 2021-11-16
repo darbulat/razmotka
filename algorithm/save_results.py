@@ -1,3 +1,4 @@
+import json
 import os
 from collections import OrderedDict
 from itertools import product
@@ -204,6 +205,7 @@ class SaveResults:
         return points, x_line_distance, y_line_distance
 
     def save_answer(self, answer, folder: str) -> Tuple:
+        file_excitation = file_winding = file_unwinding = None
         os.makedirs(folder, exist_ok=True)
         file_excitation = self.get_excitation_points(
             answer.min_x, answer.min_y,
@@ -264,8 +266,8 @@ class SaveResults:
             width + 2, height + 2,
             min_x_coord - self.delta_x,
             min_y_coord - self.delta_y,
-            max_x_coord + self.delta_x * 2,
-            max_y_coord + self.delta_y * 2
+            max_x_coord + self.delta_x * 12,  # TODO разобраться с коэффициентами
+            max_y_coord + self.delta_y * 14
         )
         multi_points = MultiPoint(
             [points[y][x] for y, x
@@ -367,7 +369,9 @@ if __name__ == '__main__':
     save_results = SaveResults(mesa_folder='mesa/', crs=28412,
                                active_line_x=active_line_x,
                                active_line_y=active_line_y)
+    with open('s_points.geojson', 'w') as f:
+        f.write(json.dumps(save_results.s_points.__geo_interface__))
     coords = save_results.convert_coordinates_to_indexes(
         Point(12435687.199999999254942, 6596820.000000000000000))
 
-    save_results.save_answer(answer, folder='2')
+    save_results.save_answer(answer, folder='3')
